@@ -1,54 +1,112 @@
 import { useState } from "react";
-import { v4 as uuidv4 } from "uuid";
+import { api } from "../api/axiosConfig.js";
 
 export const useTodos = () => {
   const [todos, setTodos] = useState([]);
 
-  const addTodo = (todo) => {
-    if (!todo.trim()) return;
-    setTodos([
-      ...todos,
-      {
-        id: uuidv4(),
-        task: todo,
-        completed: false,
-        isEditing: false,
-      },
-    ]);
-  };
-
-  const toggleComplete = (id) => {
-    setTodos(
-      todos.map((todo) =>
-        todo.id === id ? { ...todo, completed: !todo.completed } : todo
-      )
-    );
-  };
-
-  const editTodo = (id, newValue, newDate) => {
-    if (newValue === undefined) {
-      // Caso: al hacer clic en el lápiz, solo activa el modo edición
-      setTodos(
-        todos.map((todo) =>
-          todo.id === id 
-            ? { ...todo, isEditing: !todo.isEditing } : todo
-        )
-      );
-    } else {
-      // Caso: cuando se envía el formulario de edición
-      setTodos(
-        todos.map((todo) =>
-          todo.id === id 
-            ? { ...todo, task: newValue, dueDate: newDate, isEditing: false } : todo
-        )
+  // ─── Obtener todos ───
+  const fetchTodos = async () => {
+    try {
+      const response = await api.get("/todos/");
+      setTodos(response.data);
+    } catch (error) {
+      console.error(
+        "Error al obtener todos:",
+        error.response?.data || error.message
       );
     }
   };
 
-  const deleteTodo = (id) => {
-    setTodos(todos.filter((todo) => todo.id !== id));
+  // ─── Agregar un todo ───
+  const addTodo = async (task, dueDate) => {
+    if (!task.trim()) return;
+
+    try {
+      const formattedDate = dueDate
+        ? new Date(dueDate).toISOString().split("T")[0]
+        : null;
+
+      const response = await api.post("/todos/", {
+        task,
+        completed: false,
+        isEditing: false,
+        dueDate: formattedDate,
+      });
+
+      setTodos([...todos, response.data]);
+    } catch (error) {
+      console.error(
+        "Error al agregar el todo:",
+        error.response?.data || error.message
+      );
+    }
   };
 
-  return { todos, addTodo, toggleComplete, editTodo, deleteTodo };
+  // ─── Editar un todo ───
+  const editTodo = async (id, newValue, newDate) => {
+    try {
+      const formattedDate = newDate
+        ? new Date(newDate).toISOString().split("T")[0]
+        : null;
+
+      if (newValue !== undefined) {
+        const todo = todos.find((t) => t.id === id);
+
+        const response = await api.put(`/todos/${id}/`, {
+          task: newValue,
+          dueDate: formattedDate,
+          completed: todo.completed,
+          isEditing: false,
+        });
+
+        setTodos(todos.map((t) => (t.id === id ? response.data : t)));
+      } else {
+        // Solo alternar isEditing en frontend
+        setTodos(
+          todos.map((t) =>
+            t.id === id ? { ...t, isEditing: !t.isEditing } : t
+          )
+        );
+      }
+    } catch (error) {
+      console.error(
+        "Error al editar el todo:",
+        error.response?.data || error.message
+      );
+    }
+  };
+
+  // ─── Alternar completado ───
+  const toggleComplete = async (id) => {
+    try {
+      const todo = todos.find((t) => t.id === id);
+      const response = await api.put(`/todos/${id}/`, {
+        ...todo,
+        completed: !todo.completed,
+      });
+
+      setTodos(todos.map((t) => (t.id === id ? response.data : t)));
+    } catch (error) {
+      console.error(
+        "Error al cambiar estado:",
+        error.response?.data || error.message
+      );
+    }
+  };
+
+  // ─── Eliminar un todo ───
+  const deleteTodo = async (id) => {
+    try {
+      await api.delete(`/todos/${id}/`);
+      setTodos(todos.filter((t) => t.id !== id));
+    } catch (error) {
+      console.error(
+        "Error al eliminar el todo:",
+        error.response?.data || error.message
+      );
+    }
+  };
+
+  return { todos, fetchTodos, addTodo, editTodo, toggleComplete, deleteTodo };
 };
  
